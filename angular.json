@@ -6,5 +6,36 @@
   },
   "newProjectRoot": "projects",
   "projects": {
+    "asm": {
+      "projectType": "library",
+      "root": "projects/asm",
+      "sourceRoot": "projects/asm/src",
+      "prefix": "lib",
+      "architect": {
+        "build": {
+          "builder": "@angular-devkit/build-angular:ng-packagr",
+          "options": {
+            "project": "projects/asm/ng-package.json"
+          },
+          "configurations": {
+            "production": {
+              "tsConfig": "projects/asm/tsconfig.lib.prod.json"
+            },
+            "development": {
+              "tsConfig": "projects/asm/tsconfig.lib.json"
+            }
+          },
+          "defaultConfiguration": "production"
+        },
+        "test": {
+          "builder": "@angular-devkit/build-angular:karma",
+          "options": {
+            "main": "projects/asm/src/test.ts",
+            "tsConfig": "projects/asm/tsconfig.spec.json",
+            "karmaConfig": "projects/asm/karma.conf.js"
+          }
+        }
+      }
+    }
   }
 }
