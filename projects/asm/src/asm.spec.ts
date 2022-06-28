@@ -35,13 +35,61 @@ const $event = true
 
 class AnotherStateMachine<T extends AnotherEventMap<any>> {
    externalQueue: AnotherEvent[] = []
-   state: string = "#empty"
+   state: string[]
 
    next(event: ExtractEvents<T>) {
-      this.externalQueue.push(event as AnotherEvent)
+      this.externalQueue.push(toEvent(event))
+      this.tick()
    }
 
-   constructor(private schema: AnotherSchema, public config?: AnotherConfig<T>) {}
+   tick() {
+      const event = this.externalQueue.shift()
+      if (event) {
+         this.leave()
+         this.transition()
+         this.enter(event)
+      }
+   }
+
+   enter(event: AnotherEvent) {
+      const state = this.schema[this.state[0]] as AnotherStateSchema
+      this.state = getTarget(state[event.name] as AnotherEventSchema)
+   }
+
+   transition() {}
+
+   leave() {}
+
+   getInitialState() {
+      return [keys(this.schema)[0]]
+   }
+
+   constructor(private schema: AnotherSchema, public config?: AnotherConfig<T>) {
+      this.state = this.getInitialState()
+   }
+}
+
+function keys(object: {}) {
+   return Object.keys(object).filter(k => !k.startsWith("$"))
+}
+
+function getTarget(obj: string | AnotherEventSchema) {
+   return [typeof obj === "string" ? obj : obj.target]
+}
+
+function toEvent(obj: { [key: string]: any }): AnotherEvent {
+   const name = key(obj)
+   return {
+      name,
+      value: obj[name]
+   }
+}
+
+function key<T>(obj: T): string {
+   let key: string
+   // noinspection LoopStatementThatDoesntLoopJS
+   for (key in obj) break
+   return key!
 }
 
 function asm<T extends AnotherEventMap<any>>(
@@ -51,18 +99,18 @@ function asm<T extends AnotherEventMap<any>>(
    return new AnotherStateMachine<T>(schema, config)
 }
 
-interface AnotherEvent<TName = unknown, TValue = unknown> {
+interface AnotherEvent<TName = string, TValue = unknown> {
    name: TName
    value: TValue
 }
 
-interface AnotherEventFactory<TKey extends string | number | symbol, TData> {
+interface AnotherEventFactory<TKey extends string, TData> {
    (event: AnotherEvent): event is AnotherEvent<TKey, TData>
    (data: TData): { [key in TKey]: TData }
 }
 
 type AnotherEventMap<T> = {
-   [key in keyof T]: AnotherEventFactory<key, T[key]>
+   [key in keyof T]: key extends string ? AnotherEventFactory<key, T[key]> : never
 }
 
 function on<T extends { [key: string]: any }>(): AnotherEventMap<T> {
@@ -111,13 +159,18 @@ describe("asm", () => {
       expect(mx).toBeTruthy()
    })
 
-   it("should transition to next state", () => {
+   it("should be in initial state", () => {
+      const mx = asm(schema)
+      expect(mx.state).toEqual(["initial"])
+   })
+
+   it("should return the next state", () => {
       const mx = asm(schema, {
          events: { add, load },
       })
 
       mx.next({ load: null })
 
-      expect(mx.state).toBe("loading")
+      expect(mx.state).toEqual(["loading"])
    })
 })
