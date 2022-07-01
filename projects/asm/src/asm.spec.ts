@@ -1,3 +1,5 @@
+import createSpy = jasmine.createSpy
+
 type Dict<T> = Record<string, T>
 type AdditionalProperty<T> = T | undefined | {}
 
@@ -10,7 +12,7 @@ interface AnotherStateSchema {
    $final?: boolean
    $enter?: []
    $leave?: []
-   $invoke?: []
+   $invoke?: (string | AnotherInvoke)[]
    $done?: []
    $schema?: AnotherSchema
    [key: string]: AdditionalProperty<AnotherEventSchema>
@@ -23,8 +25,15 @@ interface AnotherSchema {
    [key: string]: AdditionalProperty<AnotherStateSchema>
 }
 
+interface InvokeMap {
+   [key: string]: AnotherInvoke
+}
+
+type AnotherInvoke = ((...args: any) => any)
+
 interface AnotherConfig<T extends AnotherEventMap<any>> {
    events?: T
+   invoke?: InvokeMap
 }
 
 type ExtractEvents<T extends AnotherEventMap<any>> = {
@@ -54,6 +63,13 @@ class AnotherStateMachine<T extends AnotherEventMap<any>> {
    enter(event: AnotherEvent) {
       const state = this.schema[this.state[0]] as AnotherStateSchema
       this.state = getTarget(state[event.name] as AnotherEventSchema)
+      const nextState = this.schema[this.state[0]] as AnotherStateSchema
+      for (let invoke of nextState.$invoke ?? []) {
+         invoke = this.config?.invoke?.[invoke as string] ?? invoke
+         if (typeof invoke === "function") {
+            invoke()
+         }
+      }
    }
 
    transition() {}
@@ -136,7 +152,7 @@ const schema: AnotherSchema = {
       },
    },
    loading: {
-      $invoke: [],
+      $invoke: ["invoke"],
       $done: "done",
    },
    done: {
@@ -152,6 +168,7 @@ interface Events {
 }
 
 const { add, load } = on<Events>()
+
 
 describe("asm", () => {
    it("should create", () => {
@@ -172,5 +189,19 @@ describe("asm", () => {
       mx.next({ load: null })
 
       expect(mx.state).toEqual(["loading"])
+   })
+
+   it("should invoke", () => {
+      const invoke = createSpy("invoke")
+      const mx = asm(schema, {
+         events: { add, load },
+         invoke: { invoke }
+      })
+
+      expect(invoke).toHaveBeenCalledTimes(0)
+
+      mx.next({ load: null })
+
+      expect(invoke).toHaveBeenCalledTimes(1)
    })
 })
